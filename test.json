@@ -1,0 +1,4 @@
+{"traceEvents": [ 
+        {"name": "1", "cat": "PERF", "ph": "X", "pid": "npu", "tid": "conv0", "dur":20, "ts": 1000},
+        {"name": "2", "cat": "PERF", "ph": "X", "pid": "npu", "tid": "conv1", "dur":30, "ts": 1050}
+],"displayTimeUnit": "ns"}
