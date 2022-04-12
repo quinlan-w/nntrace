@@ -1,4 +1,5 @@
 {"traceEvents": [ 
-        {"name": "1", "cat": "PERF", "ph": "X", "pid": "npu", "tid": "conv0", "dur":20, "ts": 1000},
-        {"name": "2", "cat": "PERF", "ph": "X", "pid": "npu", "tid": "conv1", "dur":30, "ts": 1050}
+	{"pid":3576, "name": "ctr", "ph": "C", "ts": 0, "dur":10,"args": {"cats": 0, "dogs": 10}},
+	{"pid":3576, "name": "ctr", "ph": "C", "ts": 10, "dur":20,"args": {"cats": 10, "dogs": 100}},
+	{"pid":3576, "name": "ctr", "ph": "C", "ts": 20, "dur":10,"args": {"cats": 0, "dogs": 10}}
 ],"displayTimeUnit": "ns"}
