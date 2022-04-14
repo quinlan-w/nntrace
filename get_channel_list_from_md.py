@@ -5,7 +5,7 @@ if __name__ == "__main__":
     c_file = open("temp", "w")
     f = open(file)
     lines = f.readlines()
-    for line in lines[2:-1]:
+    for line in lines[2:]:
         new_line =line.replace("单元", "/").replace("通道", "/").replace("累加", "count")
         _, channel_id, _signal, description, _ = new_line.split("|")
         eu_name, sub_name, _ = description.split("/")
