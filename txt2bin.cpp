@@ -6,9 +6,9 @@ typedef unsigned long long int uint64;
 
 int main(int argc, char ** argv)
 {
-    if (argc != 2) 
+    if (argc != 3) 
     {
-        printf("txt2bin file.txt\n");
+        printf("useage: txt2bin neusight.txt neusight_data.bin\n");
         return 0;
     }
     ifstream inFile(argv[1]);
@@ -18,11 +18,9 @@ int main(int argc, char ** argv)
     }
     char temp[16];
     uint64 buf = 0;
-    ofstream outFile("out.bin", ios::binary|ios::trunc);
+    ofstream outFile(argv[2], ios::binary|ios::trunc);
     while (inFile >> temp) {
-        cout << temp << endl;
         sscanf(temp, "%llx", &buf);
-        cout << buf << endl;
         outFile.write((char *)&buf, sizeof(buf));
     }
     inFile.close();
