@@ -3,6 +3,7 @@
 #include <vector>
 #include <set>
 #include <map>
+#include <math.h>
 #include <string.h>
 
 #include "neusight.h"
@@ -10,6 +11,8 @@ using namespace std;
 typedef unsigned char uint8;
 typedef unsigned int uint32;
 typedef unsigned short int uint16;
+#define ALIGN_DOWN(x, align) ((x) & ~((align)-1))
+
 
 enum DATA_TYPE
 {
@@ -35,6 +38,16 @@ typedef struct _job
     tensor_t input_tensor;  //默认一个rdma channel只读一个tensor
     tensor_t output_tensor; //默认一个wdma channel只写一个tensor
 } job_t;
+
+typedef struct _jobs_header
+{
+    uint32 version;
+    uint32 keys_offset;
+    uint32 keys_size;
+    uint32 jobs_offset;
+    uint32 jobs_size;
+} jobs_header;
+
 
 typedef struct _dot_t
 {
@@ -62,23 +75,62 @@ typedef struct _slice
     args_t args;
 } slice_t;
 
-typedef struct _nntrace
-{
-    /* data */
-    dot_t *data_info;
-    job_t *jobs_info;
-    int points_num;
-    vector<slice_t> slices;
-} nntrace;
+// typedef struct _nntrace
+// {
+//     uint32 dots_num;
+//     map<int, job_t> job_map;
+//     map<int, map<int, set<int>>> segments_map;
+// } nntrace;
+uint32 get_dots_num(const char *neusight_data, uint32 neusight_buf_capacity) {
+    dot_t *dots_info = (dot_t *)neusight_data;
+    uint32 aligned_capacity = ALIGN_DOWN(neusight_buf_capacity, sizeof(dot_t));
+    uint32 dots_num_max = aligned_capacity / sizeof(dot_t);
+    uint32 steps = (uint32)sqrt(dots_num_max);
+    uint32 sub_step = steps;
 
-static void segments2slices(nntrace *trace)
-{
-    map<int, map<int, set<int>>> segments_map;
-    for (int i = 0; i < trace->points_num; ++i)
-    {
-        segments_map[trace->data_info[i].channel_id][trace->data_info[i].segment_id].insert(trace->data_info[i].timestamp);
+    uint32 real_dots_idx = 0;
+    for (int i = 0; i < steps; ++i) {
+        if ( i == steps - 1) {
+            sub_step = dots_num_max - i * steps;
+        }
+        for(int j =0;j< sub_step;++j) {
+            if ((dots_info[i].channel_id || dots_info[i].point_id || dots_info[i].segment_id || dots_info[i].timestamp) == 0) break;
+            real_dots_idx = i * steps + j;
+
+            if (real_dots_idx == dots_num_max) {
+                printf("neusight buf is full!\n");
+            }
+        }
     }
-    for (auto chn_iter = segments_map.begin(); chn_iter != segments_map.end(); ++chn_iter)
+
+    return real_dots_idx + 1;
+}
+
+static void parser_neusight_data(const char * neusight_data, uint32 neusight_buf_capacity, map<int, map<int, set<int>>> &dots_map) {
+    uint32 dots_num = get_dots_num(neusight_data, neusight_buf_capacity);
+    dot_t * dots_info = (dot_t *) neusight_data;
+    for (int i = 0; i < dots_num; ++i)
+    {
+        dots_map[dots_info[i].channel_id][dots_info[i].segment_id].insert(dots_info[i].timestamp);
+    }
+}
+
+static void parser_jobs_data(const char * jobs_data, map<uint32, job_t> &jobs_map) {
+    if (!jobs_data) return;
+    jobs_header * header = (jobs_header *)jobs_data;
+    // TODO: CHECK
+    uint32 * keys = (uint32 *)(jobs_data + header->keys_offset);
+    job_t * jobs = (job_t*)(jobs_data + header->jobs_offset);
+    uint32 num = header->jobs_size / (sizeof(job_t));
+    for (int i = 0;i < num;++i) {
+        jobs_map[keys[i]] = jobs[i];
+    }
+}
+
+static void gen_slices(map<int, map<int, set<int>>> &dots_map, map<uint32, job_t> &job_map, vector<slice_t> &slices)
+{
+
+    for (auto chn_iter = dots_map.begin(); chn_iter != dots_map.end(); ++chn_iter)
     {
         for (auto seg_iter = chn_iter->second.begin(); seg_iter != chn_iter->second.end(); ++seg_iter)
         {
@@ -93,9 +145,11 @@ static void segments2slices(nntrace *trace)
             sli.tid = chn.name;
             sli.ts = *(seg_iter->second.begin());
             sli.dur = *seg_iter->second.rbegin() - *seg_iter->second.begin(); // ns?
-            trace->slices.push_back(sli);
+            slices.push_back(sli);
 
             // hack job info
+            uint32 key = (chn.id & 0xFF)  << 16 | ( seg_iter->first & 0xFFFF) << 0;
+            printf("key: %08x\n", key);
             if (chn.name.find("dma") != chn.name.npos || chn.name.find("bkw") != chn.name.npos)
             {
                 slice_t job_bandwidth_st;
@@ -107,7 +161,7 @@ static void segments2slices(nntrace *trace)
                 job_bandwidth_st.tid = "ocm";
                 job_bandwidth_st.ts = *(seg_iter->second.begin());
                 job_bandwidth_st.dur = *seg_iter->second.rbegin() - *seg_iter->second.begin(); // ns?
-                trace->slices.push_back(job_bandwidth_st);
+                slices.push_back(job_bandwidth_st);
 
                 slice_t job_bandwidth_end;
                 job_bandwidth_end.ph = "C";
@@ -117,7 +171,7 @@ static void segments2slices(nntrace *trace)
                 job_bandwidth_end.args.value = 0;
                 job_bandwidth_end.tid = "ocm";
                 job_bandwidth_end.ts = *(seg_iter->second.rbegin());
-                trace->slices.push_back(job_bandwidth_end);
+                slices.push_back(job_bandwidth_end);
             }
         }
     }
@@ -162,33 +216,33 @@ static void insert_trace_json_back(vector<string> &json)
     json.push_back("],\"displayTimeUnit\": \"ns\"}");
 }
 
-vector<string> get_nntrace(char *neusight_data, int len)
+
+vector<string> get_nntrace(char *neusight_data, uint32 neusight_buf_capacity, char *jobs_data = nullptr)
 {
-    // TODO: CHECK DATA
-    int dots_num = len / sizeof(dot_t);
     dot_t *dots_info = (dot_t *)neusight_data;
-    nntrace *new_trace = new nntrace;
+    map<uint32, job_t> jobs_map;
+    map<int, map<int, set<int>>> dots_map;
+    vector<slice_t> slices;
     vector<string> json;
 
-    new_trace->data_info = dots_info;
-    new_trace->points_num = dots_num;
-
-    segments2slices(new_trace);
+    parser_neusight_data(neusight_data, neusight_buf_capacity, dots_map);
+    parser_jobs_data(jobs_data, jobs_map);
+    gen_slices(dots_map, jobs_map, slices);
 
     // log
-    //  for (auto iter = new_trace->slices.begin(); iter != new_trace->slices.end();++iter)
-    //  {
-    //      printf("name: %s, cat %s, pid %s, tid %s, dur %d, ts %d \n",      iter->name.data(), \
-    //                                                                  iter->cat.data(),\
-    //                                                                  iter->pid.data(),\
-    //                                                                  iter->tid.data(),\
-    //                                                                  iter->dur,\
-    //                                                                  iter->ts);
+    for (auto iter = slices.begin(); iter != slices.end();++iter)
+    {
+        printf("name: %s, cat %s, pid %s, tid %s, dur %d, ts %d \n",      iter->name.data(), \
+                                                                    iter->cat.data(),\
+                                                                    iter->pid.data(),\
+                                                                    iter->tid.data(),\
+                                                                    iter->dur,\
+                                                                    iter->ts);
 
-    // }
+    }
 
     insert_trace_json_head(json);
-    for (auto iter = new_trace->slices.begin(); iter != new_trace->slices.end(); ++iter)
+    for (auto iter = slices.begin(); iter != slices.end(); ++iter)
     {
         insert_trace_json_body(json, *iter);
     }

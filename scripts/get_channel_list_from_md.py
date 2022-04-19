@@ -1,5 +1,4 @@
-
-'''
+"""
 befor:
 | channel id | signal              | description    |
 | ---------- | ------------------- | -------------- |
@@ -82,27 +81,42 @@ befor:
 
 after:
 
-'''
+"""
 import argparse
 
 from yaml import parse
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="translate markdown file to neusight channel list")
-    parser.add_argument('-o','--code')
-    parser.add_argument('-m','--markdown')
+    parser = argparse.ArgumentParser(
+        description="translate markdown file to neusight channel list"
+    )
+    parser.add_argument("-o", "--code")
+    parser.add_argument("-m", "--markdown")
     args = parser.parse_args()
     c_file = open(args.code, "w")
     f = open(args.markdown)
     lines = f.readlines()
     for line in lines[2:]:
-        new_line =line.replace("单元", "/").replace("通道", "/").replace("累加", "count")
+        new_line = line.replace("单元", "/").replace("通道", "/").replace("累加", "count")
         _, channel_id, _signal, description, _ = new_line.split("|")
         eu_name, sub_name, _ = description.split("/")
         eu_id = eu_name.upper()
         eu_type = eu_name.upper()[0:-1]
-        name = eu_name+"_"+sub_name
-        wline = "{" + channel_id.strip() + ", " + eu_id + ", " + eu_type + ", " + "\"" + name.strip() + "\"" + "}" + ",\n"
+        name = eu_name + "_" + sub_name
+        wline = (
+            "{"
+            + channel_id.strip()
+            + ", "
+            + eu_id
+            + ", "
+            + eu_type
+            + ", "
+            + '"'
+            + name.strip()
+            + '"'
+            + "}"
+            + ",\n"
+        )
         c_file.write(wline)
     c_file.close()
     f.close()
-
