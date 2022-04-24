@@ -1,3 +1,6 @@
+- name: clang-format lint
+  uses: DoozyX/clang-format-lint-action@v0.13
+
 name: test-clang-format
 
 on: [push]
