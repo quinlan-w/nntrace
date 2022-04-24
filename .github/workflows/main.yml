@@ -11,9 +11,9 @@ jobs:
 
     - name: clang-format lint
       uses: DoozyX/clang-format-lint-action@v0.13
-        with:
-          source: '.'
-          exclude: './doc ./case ./scripts'
-          extensions: 'h,cpp'
-          clangFormatVersion: 12
-          style: chromium
+      with:
+        source: '.'
+        exclude: './doc ./case ./scripts'
+        extensions: 'h,cpp'
+        clangFormatVersion: 12
+        style: chromium
