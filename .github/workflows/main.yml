@@ -3,17 +3,17 @@ name: test-clang-format
 on: [push]
 
 jobs:
-  build:
+  clang-format:
     runs-on: ubuntu-latest
 
     steps:
-    - name: clang-format lint
-      uses: DoozyX/clang-format-lint-action@v0.13
-    - uses: actions/checkout@v2
     - uses: DoozyX/clang-format-lint-action@v0.13
-      with:
-        source: '.'
-        exclude: './doc ./case ./scripts'
-        extensions: 'h,cpp'
-        clangFormatVersion: 12
-        style: chromium
+
+    - name: clang-format lint
+      uses: actions/checkout@v2
+        with:
+          source: '.'
+          exclude: './doc ./case ./scripts'
+          extensions: 'h,cpp'
+          clangFormatVersion: 12
+          style: chromium
