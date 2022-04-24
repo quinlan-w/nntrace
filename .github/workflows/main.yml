@@ -16,4 +16,4 @@ jobs:
         exclude: './doc ./case ./scripts'
         extensions: 'h,cpp'
         clangFormatVersion: 12
-        style: chromium
+        style: {BasedOnStyle: google, IndentWidth: 4}
