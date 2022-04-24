@@ -12,7 +12,7 @@ jobs:
       with:
         source: '.'
         exclude: './'
-        extensions: 'hpp,cc'
+        extensions: 'hpp,cpp'
         clangFormatVersion: 12
         inplace: True
         style: google
